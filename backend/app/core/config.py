@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     SUPABASE_BUCKET: str = "portfolio-base-bucket"
     OLLAMA_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "llama3.2:3b"
+    KAGGLE_USERNAME: str = ""
+    KAGGLE_KEY: str = ""
 
     model_config = {"env_file": (".env", "../.env"), "extra": "ignore"}
 

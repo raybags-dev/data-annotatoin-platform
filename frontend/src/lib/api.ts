@@ -40,4 +40,12 @@ export const api = {
   // Export URLs (direct links)
   exportUrl: (id: string, fmt: string) => `${http.defaults.baseURL}/api/v1/exports/${id}/${fmt}`,
   getReport: (id: string) => http.get(`/api/v1/exports/${id}/report`).then(r => r.data),
+
+  // Kaggle
+  kaggleSearch: (q: string) =>
+    http.get('/api/v1/kaggle/search', { params: { q, page_size: 12 } }).then(r => r.data),
+  kaggleDownload: (handle: string) =>
+    http.post('/api/v1/kaggle/download', { handle }).then(r => r.data),
+  kaggleIngest: (download_id: string, filename: string, name: string) =>
+    http.post<Dataset>('/api/v1/kaggle/ingest', { download_id, filename, name }).then(r => r.data),
 }

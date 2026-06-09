@@ -75,6 +75,29 @@ export interface Annotation {
   reviewed_at?: string
 }
 
+export interface KaggleDataset {
+  ref: string        // "owner/dataset-slug"
+  title: string
+  subtitle?: string | null
+  size?: number | null
+  last_updated: string
+  download_count: number
+  vote_count: number
+  url: string
+}
+
+export interface KaggleFile {
+  filename: string  // relative path inside archive
+  size: number
+  type: string      // csv | json | xlsx | xls
+}
+
+export interface KaggleDownloadResult {
+  download_id: string
+  handle: string
+  files: KaggleFile[]
+}
+
 export interface DashboardStats {
   total_datasets: number
   total_records: number

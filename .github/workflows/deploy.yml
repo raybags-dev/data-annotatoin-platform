@@ -80,11 +80,13 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
           DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME_PERSONAL }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         with:
           host: 89.167.74.127
           username: root
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: SUPABASE_URL,SUPABASE_SERVICE_KEY,APP_SECRET_KEY,DOCKERHUB_USER
+          envs: SUPABASE_URL,SUPABASE_SERVICE_KEY,APP_SECRET_KEY,DOCKERHUB_USER,KAGGLE_USERNAME,KAGGLE_KEY
           command_timeout: 30m
           script: |
             set -e
@@ -92,8 +94,8 @@ jobs:
             cd /opt/data-annotation-platform
 
             # Write .env from CI secrets — no file needs to pre-exist on the server
-            printf 'APP_ENV=production\nSECRET_KEY=%s\nSUPABASE_URL=%s\nSUPABASE_SERVICE_KEY=%s\nSUPABASE_BUCKET=portfolio-base-bucket\nOLLAMA_URL=http://ollama:11434\nOLLAMA_MODEL=llama3.2:3b\n' \
-              "$APP_SECRET_KEY" "$SUPABASE_URL" "$SUPABASE_SERVICE_KEY" > .env
+            printf 'APP_ENV=production\nSECRET_KEY=%s\nSUPABASE_URL=%s\nSUPABASE_SERVICE_KEY=%s\nSUPABASE_BUCKET=portfolio-base-bucket\nOLLAMA_URL=http://ollama:11434\nOLLAMA_MODEL=llama3.2:3b\nKAGGLE_USERNAME=%s\nKAGGLE_KEY=%s\n' \
+              "$APP_SECRET_KEY" "$SUPABASE_URL" "$SUPABASE_SERVICE_KEY" "$KAGGLE_USERNAME" "$KAGGLE_KEY" > .env
 
             # Write production compose (no version attribute — obsolete in Compose v2+)
             cat > docker-compose.prod.yml << COMPOSE_EOF
