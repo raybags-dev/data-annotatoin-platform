@@ -73,21 +73,30 @@ jobs:
     needs: build-and-push
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - uses: actions/checkout@v4
-
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
+          DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME_PERSONAL }}
         with:
           host: 89.167.74.127
           username: root
           key: ${{ secrets.VPS_SSH_KEY }}
+          envs: SUPABASE_URL,SUPABASE_SERVICE_KEY,APP_SECRET_KEY,DOCKERHUB_USER
+          command_timeout: 30m
           script: |
             set -e
             mkdir -p /opt/data-annotation-platform
             cd /opt/data-annotation-platform
-            # Pull latest compose file
-            cat > docker-compose.prod.yml << 'COMPOSE_EOF'
-            version: "3.9"
+
+            # Write .env from CI secrets — no file needs to pre-exist on the server
+            printf 'APP_ENV=production\nSECRET_KEY=%s\nSUPABASE_URL=%s\nSUPABASE_SERVICE_KEY=%s\nSUPABASE_BUCKET=portfolio-base-bucket\nOLLAMA_URL=http://ollama:11434\nOLLAMA_MODEL=llama3.2:3b\n' \
+              "$APP_SECRET_KEY" "$SUPABASE_URL" "$SUPABASE_SERVICE_KEY" > .env
+
+            # Write production compose (no version attribute — obsolete in Compose v2+)
+            cat > docker-compose.prod.yml << COMPOSE_EOF
             services:
               ollama:
                 image: ollama/ollama:latest
@@ -96,8 +105,9 @@ jobs:
                   - "11434:11434"
                 volumes:
                   - ollama_data:/root/.ollama
+
               backend:
-                image: ${{ secrets.DOCKERHUB_USERNAME_PERSONAL }}/data-annotation-backend:latest
+                image: ${DOCKERHUB_USER}/data-annotation-backend:latest
                 restart: unless-stopped
                 ports:
                   - "8001:8001"
@@ -106,17 +116,26 @@ jobs:
                   - OLLAMA_URL=http://ollama:11434
                 depends_on:
                   - ollama
+
               frontend:
-                image: ${{ secrets.DOCKERHUB_USERNAME_PERSONAL }}/data-annotation-frontend:latest
+                image: ${DOCKERHUB_USER}/data-annotation-frontend:latest
                 restart: unless-stopped
                 ports:
                   - "5174:80"
                 depends_on:
                   - backend
+
             volumes:
               ollama_data:
             COMPOSE_EOF
+
+            # Pull new images and restart
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d
+
+            # Pull Ollama model inside the running container (detached — non-blocking)
+            # Waits up to 15s for ollama to be ready then pulls in background
+            (sleep 15 && docker compose -f docker-compose.prod.yml exec -T ollama ollama pull llama3.2:3b) &
+
             docker image prune -f
-            echo "Deploy complete — backend :8001, frontend :5174"
+            echo "Deploy complete — backend :8001  frontend :5174"
