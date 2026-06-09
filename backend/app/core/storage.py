@@ -1,5 +1,4 @@
 """Supabase Storage wrapper for raw dataset uploads."""
-import io
 from app.core.config import settings
 
 def _client():
@@ -12,7 +11,7 @@ def upload_raw(path: str, data: bytes, content_type: str = "application/octet-st
         raise RuntimeError("SUPABASE_URL not configured")
     sb = _client()
     bucket = settings.SUPABASE_BUCKET
-    sb.storage.from_(bucket).upload(path, io.BytesIO(data), {"content-type": content_type, "upsert": "true"})
+    sb.storage.from_(bucket).upload(path, data, {"content-type": content_type, "upsert": "true"})
     return sb.storage.from_(bucket).get_public_url(path)
 
 def download_raw(path: str) -> bytes:

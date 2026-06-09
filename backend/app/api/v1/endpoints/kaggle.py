@@ -80,7 +80,7 @@ async def search_kaggle(q: str, page_size: int = 12):
         kg = _auth_kaggle()
         results = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: kg.api.datasets_list(search=q, page=1, page_size=page_size),
+            lambda: kg.api.dataset_list(search=q, page=1, page_size=page_size),
         )
     except HTTPException:
         raise
