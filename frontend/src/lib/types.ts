@@ -1,5 +1,5 @@
 export interface Dataset {
-  _id: string
+  id: string
   name: string
   filename: string
   file_type: string
@@ -55,8 +55,8 @@ export interface ProcessingEntry {
   error?: string
 }
 
-export interface Record {
-  _id: string
+export interface DataRecord {
+  id: string
   dataset_id: string
   row_index: number
   raw_data: Record<string, unknown>

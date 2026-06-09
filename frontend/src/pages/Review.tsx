@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
-import type { Record as Rec } from '../lib/types'
+import type { DataRecord } from '../lib/types'
 
 export default function Review() {
   const { id } = useParams<{ id: string }>()
@@ -47,11 +47,11 @@ export default function Review() {
       </div>
 
       <div className="space-y-3">
-        {records.map((rec: Rec) => {
+        {records.map((rec: DataRecord) => {
           const ann = rec.annotation
           const status = ann?.status ?? 'unannotated'
           return (
-            <div key={rec._id} className={`bg-gray-900 border rounded-xl p-4 ${status === 'approved' ? 'border-green-500/30' : status === 'rejected' ? 'border-red-500/30' : 'border-white/10'}`}>
+            <div key={rec.id} className={`bg-gray-900 border rounded-xl p-4 ${status === 'approved' ? 'border-green-500/30' : status === 'rejected' ? 'border-red-500/30' : 'border-white/10'}`}>
               <div className="flex items-start gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
@@ -67,15 +67,15 @@ export default function Review() {
                   {ann?.reasoning && <p className="text-xs text-gray-500 mt-1 italic">"{ann.reasoning}"</p>}
                 </div>
                 <div className="flex flex-col gap-1.5 shrink-0">
-                  <button onClick={() => review.mutate({ rid: rec._id, action: 'approve' })}
+                  <button onClick={() => review.mutate({ rid: rec.id, action: 'approve' })}
                     className="text-xs bg-green-500/10 border border-green-500/30 text-green-400 px-3 py-1 rounded-lg hover:bg-green-500/20 transition-colors">✓</button>
-                  <button onClick={() => review.mutate({ rid: rec._id, action: 'reject' })}
+                  <button onClick={() => review.mutate({ rid: rec.id, action: 'reject' })}
                     className="text-xs bg-red-500/10 border border-red-500/30 text-red-400 px-3 py-1 rounded-lg hover:bg-red-500/20 transition-colors">✗</button>
                   <div className="flex gap-1">
-                    <input value={override[rec._id] || ''} onChange={e => setOverride(p => ({ ...p, [rec._id]: e.target.value }))}
+                    <input value={override[rec.id] || ''} onChange={e => setOverride(p => ({ ...p, [rec.id]: e.target.value }))}
                       placeholder="Override…" className="w-20 text-xs bg-gray-800 border border-white/10 rounded px-2 py-1 outline-none" />
-                    <button onClick={() => review.mutate({ rid: rec._id, action: 'override', label: override[rec._id] })}
-                      disabled={!override[rec._id]}
+                    <button onClick={() => review.mutate({ rid: rec.id, action: 'override', label: override[rec.id] })}
+                      disabled={!override[rec.id]}
                       className="text-xs text-indigo-400 border border-indigo-500/30 px-2 py-1 rounded disabled:opacity-50 hover:bg-indigo-500/10 transition-colors">→</button>
                   </div>
                 </div>

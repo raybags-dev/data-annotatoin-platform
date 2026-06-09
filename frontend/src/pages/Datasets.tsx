@@ -38,16 +38,16 @@ export default function Datasets() {
       ) : (
         <div className="grid gap-4">
           {data.map(d => (
-            <div key={d._id} className="bg-gray-900 border border-white/10 rounded-xl p-5 flex items-center gap-4">
+            <div key={d.id} className="bg-gray-900 border border-white/10 rounded-xl p-5 flex items-center gap-4">
               <div className="flex-1 min-w-0">
-                <Link to={`/datasets/${d._id}`} className="font-semibold hover:text-indigo-400 transition-colors">{d.name}</Link>
+                <Link to={`/datasets/${d.id}`} className="font-semibold hover:text-indigo-400 transition-colors">{d.name}</Link>
                 <p className="text-xs text-gray-500 mt-0.5">{d.filename} · {d.row_count.toLocaleString()} rows · {d.column_count} cols</p>
               </div>
               <span className={`text-xs font-medium px-2 py-1 rounded-full bg-white/5 ${STATUS_COLOR[d.status] || 'text-gray-400'}`}>{d.status}</span>
               <div className="flex gap-2">
-                <Link to={`/datasets/${d._id}/review`} className="text-xs text-gray-400 hover:text-white border border-white/10 px-3 py-1.5 rounded-lg transition-colors">Review</Link>
-                <Link to={`/datasets/${d._id}/export`} className="text-xs text-gray-400 hover:text-white border border-white/10 px-3 py-1.5 rounded-lg transition-colors">Export</Link>
-                <button onClick={() => { if (confirm('Delete dataset?')) del.mutate(d._id) }}
+                <Link to={`/datasets/${d.id}/review`} className="text-xs text-gray-400 hover:text-white border border-white/10 px-3 py-1.5 rounded-lg transition-colors">Review</Link>
+                <Link to={`/datasets/${d.id}/export`} className="text-xs text-gray-400 hover:text-white border border-white/10 px-3 py-1.5 rounded-lg transition-colors">Export</Link>
+                <button onClick={() => { if (confirm('Delete dataset?')) del.mutate(d.id) }}
                   className="text-xs text-red-400 hover:text-red-300 border border-white/10 px-3 py-1.5 rounded-lg transition-colors">
                   Delete
                 </button>

@@ -14,7 +14,7 @@ export default function Upload() {
     mutationFn: () => api.uploadDataset(name, file!),
     onSuccess: (d) => {
       qc.invalidateQueries({ queryKey: ['datasets'] })
-      nav(`/datasets/${d._id || (d as any).id}`)
+      nav(`/datasets/${d.id || (d as any).id}`)
     },
     onError: (e: any) => setErr(e?.response?.data?.detail || 'Upload failed'),
   })

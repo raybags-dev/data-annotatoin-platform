@@ -73,8 +73,8 @@ export default function Dashboard() {
             </thead>
             <tbody>
               {data.recent_datasets.map(d => (
-                <tr key={d._id} className="border-t border-white/5 hover:bg-white/5">
-                  <td className="px-5 py-3"><Link to={`/datasets/${d._id}`} className="text-indigo-400 hover:underline">{d.name}</Link></td>
+                <tr key={d.id} className="border-t border-white/5 hover:bg-white/5">
+                  <td className="px-5 py-3"><Link to={`/datasets/${d.id}`} className="text-indigo-400 hover:underline">{d.name}</Link></td>
                   <td className="px-5 py-3"><span className="text-xs bg-white/10 px-2 py-0.5 rounded-full">{d.status}</span></td>
                   <td className="px-5 py-3 text-gray-400">{d.row_count.toLocaleString()}</td>
                   <td className="px-5 py-3 text-gray-400">{new Date(d.created_at).toLocaleDateString()}</td>
