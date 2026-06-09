@@ -1,7 +1,7 @@
 import axios from 'axios'
 import type { Dataset, DashboardStats, LabelingConfig } from './types'
 
-const http = axios.create({ baseURL: '' })
+const http = axios.create({ baseURL: '/annotation' })
 
 export const api = {
   // Datasets
