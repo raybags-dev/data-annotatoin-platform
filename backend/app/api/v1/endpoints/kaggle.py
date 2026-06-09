@@ -73,14 +73,14 @@ class IngestRequest(BaseModel):
 # ── endpoints ───────────────────────────────────────────────────────────────
 
 @router.get("/search")
-async def search_kaggle(q: str, page_size: int = 12):
-    """Search public Kaggle datasets. Returns up to page_size results."""
+async def search_kaggle(q: str):
+    """Search public Kaggle datasets."""
     _purge_stale()
     try:
         kg = _auth_kaggle()
         results = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: kg.api.dataset_list(search=q, page=1, page_size=page_size),
+            lambda: kg.api.dataset_list(search=q, page=1),
         )
     except HTTPException:
         raise
