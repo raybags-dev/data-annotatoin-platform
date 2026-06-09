@@ -1,6 +1,4 @@
 -- Data Annotation Platform — Supabase Postgres migrations
--- Run this once in your Supabase project: SQL Editor > New Query > Run
--- Tables are prefixed ann_ to avoid conflicts with other projects on the same Supabase instance.
 
 CREATE TABLE IF NOT EXISTS ann_datasets (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
