@@ -1,7 +1,7 @@
 from __future__ import annotations
 import uuid
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from supabase._async.client import AsyncClient
 from app.core.database import get_db
 from app.core.storage import upload_raw
 from app.repositories.dataset_repo import DatasetRepository
@@ -9,7 +9,7 @@ from app.models.dataset import LabelingConfig
 
 router = APIRouter()
 
-def _repo(db: AsyncIOMotorDatabase = Depends(get_db)) -> DatasetRepository:
+def _repo(db: AsyncClient = Depends(get_db)) -> DatasetRepository:
     return DatasetRepository(db)
 
 @router.get("")
@@ -29,14 +29,14 @@ async def upload_dataset(
     file: UploadFile = File(...),
     repo: DatasetRepository = Depends(_repo),
 ):
-    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "txt"
+    ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "txt"
     file_type = {"csv": "csv", "json": "json", "xlsx": "excel", "xls": "excel", "txt": "txt"}.get(ext, "txt")
     data = await file.read()
-    path = f"{uuid.uuid4()}/{file.filename}"
+    path = f"datasets/{uuid.uuid4()}/{file.filename}"
     try:
         url = upload_raw(path, data, file.content_type or "application/octet-stream")
     except RuntimeError:
-        url = ""  # Supabase not configured — dev mode
+        url = ""
 
     doc = {
         "name": name,
@@ -66,7 +66,8 @@ async def set_labeling_config(
     return {"ok": True}
 
 @router.delete("/{dataset_id}")
-async def delete_dataset(dataset_id: str, repo: DatasetRepository = Depends(_repo), db: AsyncIOMotorDatabase = Depends(get_db)):
+async def delete_dataset(dataset_id: str, db: AsyncClient = Depends(get_db)):
+    repo = DatasetRepository(db)
+    await db.table("ann_records").delete().eq("dataset_id", dataset_id).execute()
     await repo.delete(dataset_id)
-    await db.records.delete_many({"dataset_id": dataset_id})
     return {"ok": True}

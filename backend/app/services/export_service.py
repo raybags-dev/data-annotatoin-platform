@@ -3,16 +3,16 @@ from __future__ import annotations
 import io, json
 from datetime import datetime
 import pandas as pd
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from supabase._async.client import AsyncClient
 
 class ExportService:
-    def __init__(self, db: AsyncIOMotorDatabase):
+    def __init__(self, db: AsyncClient):
         self.db = db
 
     async def _get_records(self, dataset_id: str) -> list[dict]:
-        records = await self.db.records.find({"dataset_id": dataset_id}).to_list(None)
+        res = await self.db.table("ann_records").select("*").eq("dataset_id", dataset_id).order("row_index").execute()
         rows = []
-        for r in records:
+        for r in res.data:
             row = dict(r.get("cleaned_data") or r.get("raw_data") or {})
             ann = r.get("annotation")
             if ann:
@@ -24,8 +24,7 @@ class ExportService:
 
     async def to_csv(self, dataset_id: str) -> bytes:
         rows = await self._get_records(dataset_id)
-        df = pd.DataFrame(rows)
-        return df.to_csv(index=False).encode()
+        return pd.DataFrame(rows).to_csv(index=False).encode()
 
     async def to_json(self, dataset_id: str) -> bytes:
         rows = await self._get_records(dataset_id)
@@ -33,25 +32,28 @@ class ExportService:
 
     async def to_excel(self, dataset_id: str) -> bytes:
         rows = await self._get_records(dataset_id)
-        df = pd.DataFrame(rows)
         buf = io.BytesIO()
-        df.to_excel(buf, index=False)
+        pd.DataFrame(rows).to_excel(buf, index=False)
         return buf.getvalue()
 
     async def processing_report(self, dataset_id: str) -> dict:
-        from bson import ObjectId
-        doc = await self.db.datasets.find_one({"_id": ObjectId(dataset_id)})
-        if not doc:
+        res = await self.db.table("ann_datasets").select("*").eq("id", dataset_id).execute()
+        if not res.data:
             raise ValueError("Dataset not found")
-        doc["_id"] = str(doc["_id"])
-        pipeline = [
-            {"$match": {"dataset_id": dataset_id}},
-            {"$group": {"_id": "$annotation.label", "count": {"$sum": 1}}},
-        ]
-        label_dist = {r["_id"]: r["count"] for r in await self.db.records.aggregate(pipeline).to_list(None) if r["_id"]}
+        doc = res.data[0]
+
+        ann_res = await self.db.table("ann_records").select("annotation").eq("dataset_id", dataset_id).execute()
+        label_dist: dict[str, int] = {}
+        for r in ann_res.data:
+            ann = r.get("annotation")
+            if ann and ann.get("label"):
+                lbl = ann["label"]
+                label_dist[lbl] = label_dist.get(lbl, 0) + 1
+
+        history = doc.pop("processing_history", [])
         return {
-            "dataset": {k: v for k, v in doc.items() if k not in ("processing_history",)},
+            "dataset": doc,
             "label_distribution": label_dist,
-            "processing_history": doc.get("processing_history", []),
+            "processing_history": history,
             "generated_at": datetime.utcnow().isoformat(),
         }

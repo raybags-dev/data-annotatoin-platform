@@ -1,12 +1,16 @@
+import structlog
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import connect_db, close_db
 from app.api.v1.router import api_router
 
+log = structlog.get_logger()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await connect_db()
+    log.info("Connected to Supabase")
     yield
     await close_db()
 

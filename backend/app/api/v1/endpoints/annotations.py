@@ -2,13 +2,13 @@ from __future__ import annotations
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from supabase._async.client import AsyncClient
 from app.core.database import get_db
 from app.repositories.annotation_repo import AnnotationRepository
 
 router = APIRouter()
 
-def _repo(db: AsyncIOMotorDatabase = Depends(get_db)) -> AnnotationRepository:
+def _repo(db: AsyncClient = Depends(get_db)) -> AnnotationRepository:
     return AnnotationRepository(db)
 
 @router.get("/{dataset_id}/records")
@@ -32,27 +32,29 @@ async def review_record(record_id: str, body: ReviewAction, repo: AnnotationRepo
     if not rec:
         raise HTTPException(404, "Record not found")
     ann = rec.get("annotation") or {}
+    now = datetime.utcnow().isoformat()
     if body.action == "approve":
-        ann["status"] = "approved"
-        ann["human_reviewed"] = True
+        ann.update({"status": "approved", "human_reviewed": True, "reviewed_at": now})
     elif body.action == "reject":
-        ann["status"] = "rejected"
-        ann["human_reviewed"] = True
+        ann.update({"status": "rejected", "human_reviewed": True, "reviewed_at": now})
     elif body.action == "override":
         if not body.human_label:
             raise HTTPException(400, "human_label required for override")
-        ann["status"] = "approved"
-        ann["human_reviewed"] = True
-        ann["human_label"] = body.human_label
-    ann["reviewed_at"] = datetime.utcnow()
+        ann.update({"status": "approved", "human_reviewed": True, "human_label": body.human_label, "reviewed_at": now})
     await repo.update_annotation(record_id, ann)
     return {"ok": True}
 
 @router.post("/{dataset_id}/approve-all")
-async def approve_all_pending(dataset_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
-    now = datetime.utcnow()
-    result = await db.records.update_many(
-        {"dataset_id": dataset_id, "annotation.status": "pending"},
-        {"$set": {"annotation.status": "approved", "annotation.human_reviewed": True, "annotation.reviewed_at": now}}
-    )
-    return {"approved": result.modified_count}
+async def approve_all_pending(dataset_id: str, db: AsyncClient = Depends(get_db)):
+    res = await db.table("ann_records").select("id,annotation").eq("dataset_id", dataset_id).execute()
+    now = datetime.utcnow().isoformat()
+    approved = 0
+    for r in res.data:
+        ann = r.get("annotation") or {}
+        if ann.get("status") == "pending":
+            ann.update({"status": "approved", "human_reviewed": True, "reviewed_at": now})
+            await db.table("ann_records").update({
+                "annotation": ann, "updated_at": now,
+            }).eq("id", r["id"]).execute()
+            approved += 1
+    return {"approved": approved}

@@ -2,7 +2,6 @@
 from __future__ import annotations
 import re
 from datetime import datetime
-from bson import ObjectId
 from app.pipeline.base import PipelineStage
 
 class CleanStage(PipelineStage):
@@ -11,11 +10,13 @@ class CleanStage(PipelineStage):
     async def run(self, dataset_id: str, **kwargs) -> dict:
         await self._mark_running(dataset_id)
         try:
-            records = await self.db.records.find({"dataset_id": dataset_id}).to_list(None)
-            if not records:
+            res = await self.db.table("ann_records").select("*").eq("dataset_id", dataset_id).order("row_index").execute()
+            if not res.data:
                 raise ValueError("No records — run ingest first")
 
+            records = res.data
             rows_before = len(records)
+
             seen, unique_records, dups = set(), [], 0
             for r in records:
                 key = str(sorted(r["raw_data"].items()))
@@ -25,7 +26,12 @@ class CleanStage(PipelineStage):
                 seen.add(key)
                 unique_records.append(r)
 
-            missing_filled = missing_dropped = text_norm = 0
+            keep_ids = {r["id"] for r in unique_records}
+            remove_ids = [r["id"] for r in records if r["id"] not in keep_ids]
+
+            missing_dropped = text_norm = 0
+            now = datetime.utcnow().isoformat()
+
             for r in unique_records:
                 cleaned = {}
                 for k, v in r["raw_data"].items():
@@ -33,36 +39,32 @@ class CleanStage(PipelineStage):
                         cleaned[k] = None
                         missing_dropped += 1
                     elif isinstance(v, str):
-                        norm = re.sub(r"s+", " ", v.strip().lower())
+                        norm = re.sub(r"\s+", " ", v.strip().lower())
                         cleaned[k] = norm
                         if norm != v:
                             text_norm += 1
                     else:
                         cleaned[k] = v
-                await self.db.records.update_one(
-                    {"_id": r["_id"]},
-                    {"$set": {"cleaned_data": cleaned, "updated_at": datetime.utcnow()}}
-                )
+                await self.db.table("ann_records").update({
+                    "cleaned_data": cleaned,
+                    "updated_at": now,
+                }).eq("id", r["id"]).execute()
 
-            # Remove duplicate records
-            all_ids = [r["_id"] for r in records]
-            keep_ids = [r["_id"] for r in unique_records]
-            remove_ids = [i for i in all_ids if i not in set(keep_ids)]
-            if remove_ids:
-                await self.db.records.delete_many({"_id": {"$in": remove_ids}})
+            for rid in remove_ids:
+                await self.db.table("ann_records").delete().eq("id", rid).execute()
 
             report = {
                 "rows_before": rows_before,
                 "rows_after": len(unique_records),
                 "duplicates_removed": dups,
-                "missing_filled": missing_filled,
+                "missing_filled": 0,
                 "missing_dropped": missing_dropped,
                 "text_normalized": text_norm,
             }
-            await self.db.datasets.update_one(
-                {"_id": ObjectId(dataset_id)},
-                {"$set": {"cleaning_report": report, "row_count": len(unique_records)}}
-            )
+            await self.db.table("ann_datasets").update({
+                "cleaning_report": report,
+                "row_count": len(unique_records),
+            }).eq("id", dataset_id).execute()
             await self._mark_done(dataset_id, report, "cleaned")
             return report
         except Exception as e:

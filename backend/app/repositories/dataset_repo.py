@@ -1,35 +1,40 @@
 from __future__ import annotations
 from datetime import datetime
-from bson import ObjectId
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from supabase._async.client import AsyncClient
+
+TABLE = "ann_datasets"
 
 class DatasetRepository:
-    def __init__(self, db: AsyncIOMotorDatabase):
-        self.col = db.datasets
+    def __init__(self, db: AsyncClient):
+        self.db = db
 
     async def create(self, doc: dict) -> str:
-        doc["created_at"] = doc["updated_at"] = datetime.utcnow()
-        result = await self.col.insert_one(doc)
-        return str(result.inserted_id)
+        now = datetime.utcnow().isoformat()
+        doc = {**doc, "created_at": now, "updated_at": now}
+        res = await self.db.table(TABLE).insert(doc).execute()
+        return str(res.data[0]["id"])
 
     async def get(self, dataset_id: str) -> dict | None:
-        doc = await self.col.find_one({"_id": ObjectId(dataset_id)})
-        if doc:
-            doc["_id"] = str(doc["_id"])
-        return doc
+        res = await self.db.table(TABLE).select("*").eq("id", dataset_id).execute()
+        return res.data[0] if res.data else None
 
     async def list_all(self, skip: int = 0, limit: int = 50) -> list[dict]:
-        docs = await self.col.find({}).sort("created_at", -1).skip(skip).limit(limit).to_list(None)
-        for d in docs:
-            d["_id"] = str(d["_id"])
-        return docs
+        res = (
+            await self.db.table(TABLE)
+            .select("*")
+            .order("created_at", desc=True)
+            .range(skip, skip + limit - 1)
+            .execute()
+        )
+        return res.data
 
     async def update(self, dataset_id: str, patch: dict) -> None:
-        patch["updated_at"] = datetime.utcnow()
-        await self.col.update_one({"_id": ObjectId(dataset_id)}, {"$set": patch})
+        patch = {**patch, "updated_at": datetime.utcnow().isoformat()}
+        await self.db.table(TABLE).update(patch).eq("id", dataset_id).execute()
 
     async def delete(self, dataset_id: str) -> None:
-        await self.col.delete_one({"_id": ObjectId(dataset_id)})
+        await self.db.table(TABLE).delete().eq("id", dataset_id).execute()
 
     async def count(self) -> int:
-        return await self.col.count_documents({})
+        res = await self.db.table(TABLE).select("id", count="exact").execute()
+        return res.count or 0

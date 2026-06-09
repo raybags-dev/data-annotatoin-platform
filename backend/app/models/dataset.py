@@ -2,17 +2,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 from pydantic import BaseModel, Field
-from bson import ObjectId
-
-class PyObjectId(str):
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-    @classmethod
-    def validate(cls, v, _info=None):
-        if not ObjectId.is_valid(str(v)):
-            raise ValueError("Invalid ObjectId")
-        return str(v)
 
 class SchemaField(BaseModel):
     dtype: str
@@ -46,36 +35,5 @@ class ProcessingHistoryEntry(BaseModel):
 
 class LabelingConfig(BaseModel):
     categories: list[str] = []
-    label_column_hint: str | None = None  # column to focus on for classification
+    label_column_hint: str | None = None
     model: str = "llama3.2:3b"
-
-class DatasetDocument(BaseModel):
-    id: PyObjectId | None = Field(default=None, alias="_id")
-    name: str
-    filename: str
-    file_type: str  # csv | json | excel | txt
-    storage_path: str
-    storage_url: str = ""
-    status: str = "uploaded"  # uploaded|validating|validated|cleaning|cleaned|labeling|labeled|reviewing|exported
-    row_count: int = 0
-    column_count: int = 0
-    columns: list[str] = []
-    validation_report: ValidationReport | None = None
-    cleaning_report: CleaningReport | None = None
-    labeling_config: LabelingConfig = Field(default_factory=LabelingConfig)
-    processing_history: list[ProcessingHistoryEntry] = []
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-    model_config = {"populate_by_name": True, "arbitrary_types_allowed": True}
-
-class DatasetCreate(BaseModel):
-    name: str
-    filename: str
-    file_type: str
-    storage_path: str
-
-class DatasetUpdate(BaseModel):
-    name: str | None = None
-    status: str | None = None
-    labeling_config: LabelingConfig | None = None

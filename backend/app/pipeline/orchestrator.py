@@ -1,6 +1,6 @@
 """Run the full pipeline or individual named stages."""
 from __future__ import annotations
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from supabase._async.client import AsyncClient
 from app.pipeline.ingest import IngestStage
 from app.pipeline.validate import ValidateStage
 from app.pipeline.clean import CleanStage
@@ -15,14 +15,13 @@ STAGES = {
 
 FULL_PIPELINE = ["ingest", "validate", "clean", "label"]
 
-async def run_stage(db: AsyncIOMotorDatabase, dataset_id: str, stage: str, **kwargs) -> dict:
+async def run_stage(db: AsyncClient, dataset_id: str, stage: str, **kwargs) -> dict:
     cls = STAGES.get(stage)
     if not cls:
         raise ValueError(f"Unknown stage: {stage}. Choose from {list(STAGES)}")
     return await cls(db).run(dataset_id, **kwargs)
 
-async def run_pipeline(db: AsyncIOMotorDatabase, dataset_id: str, stages: list[str] | None = None, **kwargs) -> dict:
-    """Run a sequence of stages. Defaults to the full pipeline."""
+async def run_pipeline(db: AsyncClient, dataset_id: str, stages: list[str] | None = None, **kwargs) -> dict:
     to_run = stages or FULL_PIPELINE
     results = {}
     for stage in to_run:

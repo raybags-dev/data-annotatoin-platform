@@ -2,7 +2,6 @@
 from __future__ import annotations
 import json, httpx
 from datetime import datetime
-from bson import ObjectId
 from app.pipeline.base import PipelineStage
 from app.core.config import settings
 
@@ -19,21 +18,23 @@ class LabelStage(PipelineStage):
     async def run(self, dataset_id: str, **kwargs) -> dict:
         await self._mark_running(dataset_id)
         try:
-            doc = await self.db.datasets.find_one({"_id": ObjectId(dataset_id)})
-            if not doc:
+            res = await self.db.table("ann_datasets").select("labeling_config").eq("id", dataset_id).execute()
+            if not res.data:
                 raise ValueError("Dataset not found")
 
-            config = doc.get("labeling_config", {})
+            config = res.data[0].get("labeling_config") or {}
             categories = config.get("categories", [])
             if not categories:
                 raise ValueError("No labeling categories configured. Set labeling_config.categories first.")
 
             model = config.get("model", settings.OLLAMA_MODEL)
-            records = await self.db.records.find({"dataset_id": dataset_id}).to_list(None)
+            recs = await self.db.table("ann_records").select("*").eq("dataset_id", dataset_id).execute()
 
             labeled = failed = 0
+            now = datetime.utcnow().isoformat()
+
             async with httpx.AsyncClient(timeout=120) as client:
-                for r in records:
+                for r in recs.data:
                     data = r.get("cleaned_data") or r.get("raw_data") or {}
                     prompt = PROMPT.format(
                         categories=", ".join(categories),
@@ -46,7 +47,6 @@ class LabelStage(PipelineStage):
                         )
                         resp.raise_for_status()
                         raw = resp.json().get("response", "")
-                        # Extract JSON from response
                         start = raw.find("{")
                         end = raw.rfind("}") + 1
                         parsed = json.loads(raw[start:end]) if start >= 0 else {}
@@ -74,12 +74,12 @@ class LabelStage(PipelineStage):
                         }
                         failed += 1
 
-                    await self.db.records.update_one(
-                        {"_id": r["_id"]},
-                        {"$set": {"annotation": annotation, "updated_at": datetime.utcnow()}}
-                    )
+                    await self.db.table("ann_records").update({
+                        "annotation": annotation,
+                        "updated_at": now,
+                    }).eq("id", r["id"]).execute()
 
-            metrics = {"total": len(records), "labeled": labeled, "failed": failed}
+            metrics = {"total": len(recs.data), "labeled": labeled, "failed": failed}
             await self._mark_done(dataset_id, metrics, "labeled")
             return metrics
         except Exception as e:

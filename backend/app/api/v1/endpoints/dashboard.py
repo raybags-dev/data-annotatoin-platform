@@ -1,47 +1,54 @@
 from fastapi import APIRouter, Depends
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from supabase._async.client import AsyncClient
 from app.core.database import get_db
 
 router = APIRouter()
 
 @router.get("")
-async def dashboard_stats(db: AsyncIOMotorDatabase = Depends(get_db)):
-    total_datasets = await db.datasets.count_documents({})
-    total_records = await db.records.count_documents({})
+async def dashboard_stats(db: AsyncClient = Depends(get_db)):
+    ds_res = await db.table("ann_datasets").select("*").order("created_at", desc=True).execute()
+    rec_res = await db.table("ann_records").select("annotation").execute()
 
-    status_pipeline = [{"$group": {"_id": "$status", "count": {"$sum": 1}}}]
-    status_dist = {r["_id"]: r["count"] for r in await db.datasets.aggregate(status_pipeline).to_list(None)}
+    datasets = ds_res.data or []
+    records = rec_res.data or []
 
-    ann_pipeline = [{"$group": {"_id": "$annotation.status", "count": {"$sum": 1}}}]
-    ann_dist = {r["_id"] or "unannotated": r["count"] for r in await db.records.aggregate(ann_pipeline).to_list(None)}
+    # Status distribution
+    status_dist: dict[str, int] = {}
+    for d in datasets:
+        s = d.get("status", "unknown")
+        status_dist[s] = status_dist.get(s, 0) + 1
 
-    label_pipeline = [
-        {"$match": {"annotation": {"$ne": None}}},
-        {"$group": {"_id": "$annotation.label", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}},
-        {"$limit": 20},
-    ]
-    label_dist = {r["_id"]: r["count"] for r in await db.records.aggregate(label_pipeline).to_list(None) if r["_id"]}
+    # Annotation status distribution
+    ann_dist: dict[str, int] = {}
+    label_dist: dict[str, int] = {}
+    confidence_vals: list[float] = []
+    for r in records:
+        ann = r.get("annotation")
+        status = ann.get("status") if ann else "unannotated"
+        ann_dist[status or "unannotated"] = ann_dist.get(status or "unannotated", 0) + 1
+        if ann and ann.get("label"):
+            lbl = ann["label"]
+            label_dist[lbl] = label_dist.get(lbl, 0) + 1
+        if ann and ann.get("confidence", 0) > 0:
+            confidence_vals.append(float(ann["confidence"]))
 
-    conf_pipeline = [
-        {"$match": {"annotation.confidence": {"$gt": 0}}},
-        {"$group": {"_id": None, "avg": {"$avg": "$annotation.confidence"}, "min": {"$min": "$annotation.confidence"}, "max": {"$max": "$annotation.confidence"}}},
-    ]
-    conf_result = await db.records.aggregate(conf_pipeline).to_list(1)
-    confidence_stats = conf_result[0] if conf_result else {}
-    if "_id" in confidence_stats:
-        del confidence_stats["_id"]
+    confidence_stats = {}
+    if confidence_vals:
+        confidence_stats = {
+            "avg": sum(confidence_vals) / len(confidence_vals),
+            "min": min(confidence_vals),
+            "max": max(confidence_vals),
+        }
 
-    recent = await db.datasets.find({}).sort("created_at", -1).limit(5).to_list(None)
-    for d in recent:
-        d["_id"] = str(d["_id"])
+    # Top 20 labels
+    top_labels = dict(sorted(label_dist.items(), key=lambda x: x[1], reverse=True)[:20])
 
     return {
-        "total_datasets": total_datasets,
-        "total_records": total_records,
+        "total_datasets": len(datasets),
+        "total_records": len(records),
         "dataset_status_distribution": status_dist,
         "annotation_status_distribution": ann_dist,
-        "label_distribution": label_dist,
+        "label_distribution": top_labels,
         "confidence_stats": confidence_stats,
-        "recent_datasets": recent,
+        "recent_datasets": datasets[:5],
     }

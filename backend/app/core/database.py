@@ -1,17 +1,17 @@
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from supabase._async.client import AsyncClient, acreate_client
 from app.core.config import settings
 
-_client: AsyncIOMotorClient | None = None
+_client: AsyncClient | None = None
 
 async def connect_db() -> None:
     global _client
-    _client = AsyncIOMotorClient(settings.MONGO_URL)
+    _client = await acreate_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
 
 async def close_db() -> None:
-    if _client:
-        _client.close()
+    global _client
+    _client = None
 
-def get_db() -> AsyncIOMotorDatabase:
+def get_db() -> AsyncClient:
     if _client is None:
-        raise RuntimeError("DB not connected")
-    return _client[settings.MONGO_DB]
+        raise RuntimeError("Database not connected")
+    return _client

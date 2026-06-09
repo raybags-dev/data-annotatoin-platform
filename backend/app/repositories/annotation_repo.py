@@ -1,42 +1,49 @@
 from __future__ import annotations
 from datetime import datetime
-from bson import ObjectId
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from supabase._async.client import AsyncClient
+
+TABLE = "ann_records"
 
 class AnnotationRepository:
-    def __init__(self, db: AsyncIOMotorDatabase):
-        self.col = db.records
+    def __init__(self, db: AsyncClient):
+        self.db = db
 
     async def list_for_dataset(self, dataset_id: str, skip: int = 0, limit: int = 100) -> list[dict]:
-        docs = await self.col.find({"dataset_id": dataset_id}).skip(skip).limit(limit).to_list(None)
-        for d in docs:
-            d["_id"] = str(d["_id"])
-        return docs
+        res = (
+            await self.db.table(TABLE)
+            .select("*")
+            .eq("dataset_id", dataset_id)
+            .order("row_index")
+            .range(skip, skip + limit - 1)
+            .execute()
+        )
+        return res.data
 
     async def get(self, record_id: str) -> dict | None:
-        doc = await self.col.find_one({"_id": ObjectId(record_id)})
-        if doc:
-            doc["_id"] = str(doc["_id"])
-        return doc
+        res = await self.db.table(TABLE).select("*").eq("id", record_id).execute()
+        return res.data[0] if res.data else None
 
-    async def update_annotation(self, record_id: str, patch: dict) -> None:
-        await self.col.update_one(
-            {"_id": ObjectId(record_id)},
-            {"$set": {"annotation": patch, "updated_at": datetime.utcnow()}}
-        )
+    async def update_annotation(self, record_id: str, annotation: dict) -> None:
+        await self.db.table(TABLE).update({
+            "annotation": annotation,
+            "updated_at": datetime.utcnow().isoformat(),
+        }).eq("id", record_id).execute()
 
     async def count_by_status(self, dataset_id: str) -> dict[str, int]:
-        pipeline = [
-            {"$match": {"dataset_id": dataset_id}},
-            {"$group": {"_id": "$annotation.status", "count": {"$sum": 1}}},
-        ]
-        result = await self.col.aggregate(pipeline).to_list(None)
-        return {r["_id"] or "unannotated": r["count"] for r in result}
+        res = await self.db.table(TABLE).select("annotation").eq("dataset_id", dataset_id).execute()
+        counts: dict[str, int] = {}
+        for r in res.data:
+            ann = r.get("annotation")
+            status = ann.get("status") if ann else "unannotated"
+            counts[status or "unannotated"] = counts.get(status or "unannotated", 0) + 1
+        return counts
 
     async def label_distribution(self, dataset_id: str) -> dict[str, int]:
-        pipeline = [
-            {"$match": {"dataset_id": dataset_id, "annotation": {"$ne": None}}},
-            {"$group": {"_id": "$annotation.label", "count": {"$sum": 1}}},
-        ]
-        result = await self.col.aggregate(pipeline).to_list(None)
-        return {r["_id"]: r["count"] for r in result if r["_id"]}
+        res = await self.db.table(TABLE).select("annotation").eq("dataset_id", dataset_id).execute()
+        dist: dict[str, int] = {}
+        for r in res.data:
+            ann = r.get("annotation")
+            if ann and ann.get("label"):
+                label = ann["label"]
+                dist[label] = dist.get(label, 0) + 1
+        return dist
