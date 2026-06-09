@@ -93,14 +93,20 @@ jobs:
             mkdir -p /opt/data-annotation-platform
             cd /opt/data-annotation-platform
 
-            # Write .env — only overwrite if the critical Supabase secrets are present.
-            # If they're missing from GitHub secrets the existing .env is preserved,
-            # so a misconfigured CI run can never brick a running deployment.
-            if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_SERVICE_KEY" ] && [ -n "$APP_SECRET_KEY" ]; then
+            # Write .env — only overwrite Supabase creds if the service key JWT
+            # references the same project as SUPABASE_URL. This prevents a stale/wrong
+            # GitHub secret from bricking a working deployment.
+            _key_ref() { echo "$1" | cut -d. -f2 | { cat; echo; } | base64 -d 2>/dev/null | python3 -c "import sys,json; d=json.loads(sys.stdin.read().rstrip(chr(0))); print(d.get('ref',''))" 2>/dev/null; }
+            _url_ref() { echo "$1" | sed 's|https://\([^.]*\)\..*|\1|'; }
+            KEY_REF=$(_key_ref "$SUPABASE_SERVICE_KEY")
+            URL_REF=$(_url_ref "$SUPABASE_URL")
+            if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_SERVICE_KEY" ] && [ -n "$APP_SECRET_KEY" ] \
+               && [ -n "$KEY_REF" ] && [ "$KEY_REF" = "$URL_REF" ]; then
               printf 'APP_ENV=production\nSECRET_KEY=%s\nSUPABASE_URL=%s\nSUPABASE_SERVICE_KEY=%s\nSUPABASE_BUCKET=portfolio-base-bucket\nOLLAMA_URL=http://ollama:11434\nOLLAMA_MODEL=llama3.2:3b\nKAGGLE_USERNAME=%s\nKAGGLE_KEY=%s\n' \
                 "$APP_SECRET_KEY" "$SUPABASE_URL" "$SUPABASE_SERVICE_KEY" "$KAGGLE_USERNAME" "$KAGGLE_KEY" > .env
+              echo "INFO: .env written — key project ref '$KEY_REF' matches URL"
             else
-              echo "WARNING: SUPABASE_URL/SUPABASE_SERVICE_KEY/APP_SECRET_KEY not in CI secrets — preserving existing .env"
+              echo "WARNING: service key project ref '$KEY_REF' != URL ref '$URL_REF' or secrets missing — preserving existing .env"
               # Still patch Kaggle creds so they stay current
               for kv in "KAGGLE_USERNAME=$KAGGLE_USERNAME" "KAGGLE_KEY=$KAGGLE_KEY"; do
                 key="${kv%%=*}"; val="${kv#*=}"

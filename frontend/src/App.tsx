@@ -9,7 +9,7 @@ import Export from './pages/Export'
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/annotation">
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
