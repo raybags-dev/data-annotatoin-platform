@@ -42,3 +42,7 @@ CREATE POLICY "service role full access on ann_datasets"
   ON ann_datasets FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "service role full access on ann_records"
   ON ann_records FOR ALL USING (true) WITH CHECK (true);
+
+-- v2: file size tracking and Kaggle source tracking
+ALTER TABLE ann_datasets ADD COLUMN IF NOT EXISTS file_size_bytes BIGINT DEFAULT 0;
+ALTER TABLE ann_datasets ADD COLUMN IF NOT EXISTS kaggle_handle TEXT DEFAULT '';

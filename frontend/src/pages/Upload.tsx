@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
@@ -18,6 +18,8 @@ function fmtNum(n: number): string {
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
   return String(n)
 }
+
+const MAX_BYTES = 150 * 1024 * 1024 // 150 MB
 
 // ─── upload tab ───────────────────────────────────────────────────────────────
 
@@ -74,7 +76,7 @@ function UploadTab() {
 type KagglePhase =
   | { phase: 'search' }
   | { phase: 'results'; datasets: KaggleDataset[] }
-  | { phase: 'downloading'; handle: string }
+  | { phase: 'polling'; download_id: string; handle: string }
   | { phase: 'pick'; result: KaggleDownloadResult }
   | { phase: 'ingesting' }
 
@@ -86,11 +88,72 @@ function KaggleTab() {
   const [selectedFile, setSelectedFile] = useState<KaggleFile | null>(null)
   const [datasetName, setDatasetName] = useState('')
   const [err, setErr] = useState('')
+  const [sizeWarning, setSizeWarning] = useState('')
+  const pollInterval = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // ── polling effect ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (state.phase !== 'polling') {
+      if (pollInterval.current) {
+        clearInterval(pollInterval.current)
+        pollInterval.current = null
+      }
+      return
+    }
+
+    const { download_id } = state
+
+    const tick = async () => {
+      try {
+        const status = await api.kaggleDownloadStatus(download_id)
+        if (status.status === 'ready' && status.files) {
+          if (pollInterval.current) {
+            clearInterval(pollInterval.current)
+            pollInterval.current = null
+          }
+          const result: KaggleDownloadResult = {
+            download_id,
+            handle: status.handle,
+            files: status.files,
+          }
+          if (result.files.length === 1) setSelectedFile(result.files[0])
+          setState({ phase: 'pick', result })
+        } else if (status.status === 'error') {
+          if (pollInterval.current) {
+            clearInterval(pollInterval.current)
+            pollInterval.current = null
+          }
+          setErr(status.error || 'Download failed')
+          setState({ phase: 'search' })
+        }
+        // still 'pending' — keep polling
+      } catch (ex: any) {
+        if (pollInterval.current) {
+          clearInterval(pollInterval.current)
+          pollInterval.current = null
+        }
+        setErr(ex?.response?.data?.detail || 'Polling failed')
+        setState({ phase: 'search' })
+      }
+    }
+
+    pollInterval.current = setInterval(tick, 2000)
+    // Run one tick immediately so we don't wait the first 2s needlessly
+    tick()
+
+    return () => {
+      if (pollInterval.current) {
+        clearInterval(pollInterval.current)
+        pollInterval.current = null
+      }
+    }
+  }, [state])
 
   async function doSearch(e: React.FormEvent) {
     e.preventDefault()
     if (!query.trim()) return
     setErr('')
+    setSizeWarning('')
     setState({ phase: 'results', datasets: [] })
     try {
       const results: KaggleDataset[] = await api.kaggleSearch(query.trim())
@@ -103,13 +166,33 @@ function KaggleTab() {
 
   async function doDownload(dataset: KaggleDataset) {
     setErr('')
-    setState({ phase: 'downloading', handle: dataset.ref })
+    setSizeWarning('')
+
+    // Size warning — show but still allow with confirmation
+    if (dataset.size && dataset.size > MAX_BYTES) {
+      const confirmed = confirm(
+        `This dataset is ${fmtSize(dataset.size)}, which exceeds the recommended 150 MB limit. ` +
+        `Download may be slow or fail. Continue anyway?`
+      )
+      if (!confirmed) return
+    }
+
     try {
-      const result: KaggleDownloadResult = await api.kaggleDownload(dataset.ref)
-      // Auto-select if only one file
-      if (result.files.length === 1) setSelectedFile(result.files[0])
+      const response = await api.kaggleDownload(dataset.ref, dataset.size)
+
+      // Already imported — navigate directly
+      if (response.existing) {
+        qc.invalidateQueries({ queryKey: ['datasets'] })
+        nav(`/datasets/${response.dataset_id}`, {
+          state: { note: 'Dataset already imported — showing existing record.' },
+        })
+        return
+      }
+
+      // Background download started — begin polling
+      const { download_id, handle } = response as { download_id: string; handle: string }
       setDatasetName(dataset.title)
-      setState({ phase: 'pick', result })
+      setState({ phase: 'polling', download_id, handle })
     } catch (ex: any) {
       setErr(ex?.response?.data?.detail || 'Download failed')
       setState({ phase: 'search' })
@@ -131,6 +214,8 @@ function KaggleTab() {
     }
   }
 
+  const isBusy = state.phase === 'polling' || state.phase === 'ingesting'
+
   return (
     <div className="space-y-6 max-w-4xl">
       {/* Search bar */}
@@ -143,7 +228,7 @@ function KaggleTab() {
         />
         <button
           type="submit"
-          disabled={!query.trim() || state.phase === 'downloading' || state.phase === 'ingesting'}
+          disabled={!query.trim() || isBusy}
           className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium px-5 py-2.5 rounded-lg transition-colors whitespace-nowrap"
         >
           Search
@@ -153,15 +238,21 @@ function KaggleTab() {
       {err && (
         <p className="text-sm text-red-400 bg-red-500/10 px-3 py-2 rounded-lg">{err}</p>
       )}
+      {sizeWarning && (
+        <p className="text-sm text-yellow-400 bg-yellow-500/10 px-3 py-2 rounded-lg">{sizeWarning}</p>
+      )}
 
-      {/* Downloading spinner */}
-      {state.phase === 'downloading' && (
+      {/* Polling spinner */}
+      {state.phase === 'polling' && (
         <div className="flex items-center gap-3 text-gray-400 py-8">
           <svg className="animate-spin h-5 w-5 text-indigo-400" viewBox="0 0 24 24" fill="none">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
           </svg>
-          <span>Downloading <span className="text-indigo-400 font-mono">{state.handle}</span> from Kaggle — this may take a moment…</span>
+          <span>
+            Downloading <span className="text-indigo-400 font-mono">{state.handle}</span> from Kaggle…
+            <span className="ml-2 text-xs text-gray-600">(checking every 2s)</span>
+          </span>
         </div>
       )}
 
@@ -228,7 +319,7 @@ function KaggleTab() {
               disabled={!selectedFile || !datasetName.trim()}
               className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium px-6 py-2.5 rounded-lg transition-colors"
             >
-              Ingest & Annotate →
+              Ingest &amp; Annotate →
             </button>
             <button
               onClick={() => setState({ phase: 'search' })}
@@ -260,14 +351,18 @@ function KaggleTab() {
                     )}
                   </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
-                    <span title="Size">📦 {fmtSize(ds.size)}</span>
+                    <span title="Size" className={ds.size && ds.size > MAX_BYTES ? 'text-yellow-500' : ''}>
+                      {ds.size && ds.size > MAX_BYTES ? '⚠ ' : ''}
+                      {fmtSize(ds.size)}
+                    </span>
                     <span title="Downloads">↓ {fmtNum(ds.download_count)}</span>
                     <span title="Votes">▲ {fmtNum(ds.vote_count)}</span>
                   </div>
                   <div className="flex gap-2">
                     <button
                       onClick={() => doDownload(ds)}
-                      className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium py-2 rounded-lg transition-colors"
+                      disabled={isBusy}
+                      className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-lg transition-colors"
                     >
                       Use dataset
                     </button>

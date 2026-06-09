@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { Dataset, DashboardStats, LabelingConfig } from './types'
+import type { Dataset, DashboardStats, LabelingConfig, KaggleDownloadStatus, DataPreview, StorageSummary } from './types'
 
 const http = axios.create({ baseURL: '/annotation' })
 
@@ -44,8 +44,16 @@ export const api = {
   // Kaggle
   kaggleSearch: (q: string) =>
     http.get('/api/v1/kaggle/search', { params: { q } }).then(r => r.data),
-  kaggleDownload: (handle: string) =>
-    http.post('/api/v1/kaggle/download', { handle }).then(r => r.data),
+  kaggleDownload: (handle: string, size_bytes?: number | null) =>
+    http.post('/api/v1/kaggle/download', { handle, size_bytes }).then(r => r.data),
+  kaggleDownloadStatus: (download_id: string) =>
+    http.get<KaggleDownloadStatus>(`/api/v1/kaggle/download-status/${download_id}`).then(r => r.data),
   kaggleIngest: (download_id: string, filename: string, name: string) =>
     http.post<Dataset>('/api/v1/kaggle/ingest', { download_id, filename, name }).then(r => r.data),
+
+  // Dataset extras
+  datasetPreview: (id: string) =>
+    http.get<DataPreview>(`/api/v1/datasets/${id}/preview`).then(r => r.data),
+  storageSummary: () =>
+    http.get<StorageSummary>('/api/v1/datasets/storage-summary').then(r => r.data),
 }

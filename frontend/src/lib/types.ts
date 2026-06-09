@@ -14,6 +14,8 @@ export interface Dataset {
   processing_history: ProcessingEntry[]
   created_at: string
   updated_at: string
+  file_size_bytes?: number
+  kaggle_handle?: string
 }
 
 export interface ValidationReport {
@@ -96,6 +98,23 @@ export interface KaggleDownloadResult {
   download_id: string
   handle: string
   files: KaggleFile[]
+}
+
+export interface KaggleDownloadStatus {
+  status: 'pending' | 'ready' | 'error'
+  handle: string
+  files?: KaggleFile[]
+  error?: string
+}
+
+export interface DataPreview {
+  columns: string[]
+  rows: Record<string, unknown>[]
+}
+
+export interface StorageSummary {
+  total_bytes: number
+  dataset_count: number
 }
 
 export interface DashboardStats {
