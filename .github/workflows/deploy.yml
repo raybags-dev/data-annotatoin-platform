@@ -93,9 +93,23 @@ jobs:
             mkdir -p /opt/data-annotation-platform
             cd /opt/data-annotation-platform
 
-            # Write .env from CI secrets — no file needs to pre-exist on the server
-            printf 'APP_ENV=production\nSECRET_KEY=%s\nSUPABASE_URL=%s\nSUPABASE_SERVICE_KEY=%s\nSUPABASE_BUCKET=portfolio-base-bucket\nOLLAMA_URL=http://ollama:11434\nOLLAMA_MODEL=llama3.2:3b\nKAGGLE_USERNAME=%s\nKAGGLE_KEY=%s\n' \
-              "$APP_SECRET_KEY" "$SUPABASE_URL" "$SUPABASE_SERVICE_KEY" "$KAGGLE_USERNAME" "$KAGGLE_KEY" > .env
+            # Write .env — only overwrite if the critical Supabase secrets are present.
+            # If they're missing from GitHub secrets the existing .env is preserved,
+            # so a misconfigured CI run can never brick a running deployment.
+            if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_SERVICE_KEY" ] && [ -n "$APP_SECRET_KEY" ]; then
+              printf 'APP_ENV=production\nSECRET_KEY=%s\nSUPABASE_URL=%s\nSUPABASE_SERVICE_KEY=%s\nSUPABASE_BUCKET=portfolio-base-bucket\nOLLAMA_URL=http://ollama:11434\nOLLAMA_MODEL=llama3.2:3b\nKAGGLE_USERNAME=%s\nKAGGLE_KEY=%s\n' \
+                "$APP_SECRET_KEY" "$SUPABASE_URL" "$SUPABASE_SERVICE_KEY" "$KAGGLE_USERNAME" "$KAGGLE_KEY" > .env
+            else
+              echo "WARNING: SUPABASE_URL/SUPABASE_SERVICE_KEY/APP_SECRET_KEY not in CI secrets — preserving existing .env"
+              # Still patch Kaggle creds so they stay current
+              for kv in "KAGGLE_USERNAME=$KAGGLE_USERNAME" "KAGGLE_KEY=$KAGGLE_KEY"; do
+                key="${kv%%=*}"; val="${kv#*=}"
+                [ -z "$val" ] && continue
+                grep -q "^${key}=" .env 2>/dev/null \
+                  && sed -i "s|^${key}=.*|${key}=${val}|" .env \
+                  || echo "${key}=${val}" >> .env
+              done
+            fi
 
             # Write production compose (no version attribute — obsolete in Compose v2+)
             cat > docker-compose.prod.yml << COMPOSE_EOF
