@@ -1,6 +1,6 @@
 """Run the full pipeline or individual named stages."""
 from __future__ import annotations
-from supabase._async.client import AsyncClient
+from supabase import AsyncClient
 from app.pipeline.ingest import IngestStage
 from app.pipeline.validate import ValidateStage
 from app.pipeline.clean import CleanStage

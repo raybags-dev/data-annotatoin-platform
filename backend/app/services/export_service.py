@@ -3,7 +3,7 @@ from __future__ import annotations
 import io, json
 from datetime import datetime
 import pandas as pd
-from supabase._async.client import AsyncClient
+from supabase import AsyncClient
 
 class ExportService:
     def __init__(self, db: AsyncClient):

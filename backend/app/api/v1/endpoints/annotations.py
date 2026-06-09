@@ -2,7 +2,7 @@ from __future__ import annotations
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from supabase._async.client import AsyncClient
+from supabase import AsyncClient
 from app.core.database import get_db
 from app.repositories.annotation_repo import AnnotationRepository
 

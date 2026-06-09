@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from supabase._async.client import AsyncClient
+from supabase import AsyncClient
 from app.core.database import get_db
 
 router = APIRouter()

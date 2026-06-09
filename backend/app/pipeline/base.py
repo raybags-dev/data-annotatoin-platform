@@ -1,7 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime
-from supabase._async.client import AsyncClient
+from supabase import AsyncClient
 
 TABLE = "ann_datasets"
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 import uuid
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from supabase._async.client import AsyncClient
+from supabase import AsyncClient
 from app.core.database import get_db
 from app.core.storage import upload_raw
 from app.repositories.dataset_repo import DatasetRepository

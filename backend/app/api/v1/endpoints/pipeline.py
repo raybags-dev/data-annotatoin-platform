@@ -1,7 +1,7 @@
 from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from supabase._async.client import AsyncClient
+from supabase import AsyncClient
 from app.core.database import get_db
 from app.pipeline.orchestrator import run_stage, run_pipeline, FULL_PIPELINE
 

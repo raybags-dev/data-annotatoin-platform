@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
-from supabase._async.client import AsyncClient
+from supabase import AsyncClient
 from app.core.database import get_db
 from app.services.export_service import ExportService
 
