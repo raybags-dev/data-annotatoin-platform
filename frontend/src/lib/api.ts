@@ -1,7 +1,7 @@
 import axios from 'axios'
 import type { Dataset, DashboardStats, LabelingConfig } from './types'
 
-const http = axios.create({ baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8001' })
+const http = axios.create({ baseURL: '' })
 
 export const api = {
   // Datasets
@@ -43,7 +43,7 @@ export const api = {
 
   // Kaggle
   kaggleSearch: (q: string) =>
-    http.get('/api/v1/kaggle/search', { params: { q, page_size: 12 } }).then(r => r.data),
+    http.get('/api/v1/kaggle/search', { params: { q } }).then(r => r.data),
   kaggleDownload: (handle: string) =>
     http.post('/api/v1/kaggle/download', { handle }).then(r => r.data),
   kaggleIngest: (download_id: string, filename: string, name: string) =>
