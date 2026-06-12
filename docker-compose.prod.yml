@@ -9,6 +9,8 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=-1
 
   backend:
     image: ${DOCKERHUB_USERNAME}/data-annotation-backend:latest
