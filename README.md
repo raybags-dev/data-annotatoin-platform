@@ -11,7 +11,7 @@ A full-stack data engineering platform for collecting, cleaning, labeling, analy
 | Database | Supabase Postgres (`ann_datasets`, `ann_records` tables) |
 | File storage | Supabase Storage (`portfolio-base-bucket`) |
 | AI labeling | Ollama (`llama3.2:3b`) running in Docker |
-| CI/CD | GitHub Actions → Docker Hub → VPS (89.167.74.127) |
+| CI/CD | GitHub Actions → Docker Hub → VPS (12.345.67.891) |
 
 ## Pipeline stages
 
@@ -67,16 +67,16 @@ Required GitHub Secrets:
 |---|---|
 | `DOCKERHUB_USERNAME_PERSONAL` | Docker Hub username |
 | `DOCKERHUB_TOKEN_PERSONAL` | Docker Hub access token |
-| `VPS_SSH_KEY` | Private SSH key for root@89.167.74.127 |
+| `VPS_SSH_KEY` | Private SSH key for root@12.345.67.891 |
 
 First deploy (manual setup on VPS):
 ```bash
-ssh root@89.167.74.127
+ssh root@12.345.67.891
 mkdir -p /opt/data-annotation-platform
 cat > /opt/data-annotation-platform/.env << 'EOF'
 APP_ENV=production
 SECRET_KEY=<your-secret-key>
-SUPABASE_URL=https://hxkxoduptzlbdkgpdstp.supabase.co
+SUPABASE_URL=https://123ygro4567whfg***.supabase.co
 SUPABASE_SERVICE_KEY=<service-role-key>
 SUPABASE_BUCKET=portfolio-base-bucket
 OLLAMA_URL=http://ollama:11434
