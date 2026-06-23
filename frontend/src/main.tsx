@@ -13,3 +13,14 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </React.StrictMode>
 )
+
+// Remove the HTML loader overlay once React has painted its first frame
+requestAnimationFrame(() => {
+  requestAnimationFrame(() => {
+    const loader = document.getElementById('app-loader')
+    if (loader) {
+      loader.classList.add('fade-out')
+      setTimeout(() => loader.remove(), 380)
+    }
+  })
+})
